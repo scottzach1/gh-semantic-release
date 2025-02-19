@@ -1,5 +1,12 @@
 # gh-semantic-release
 
+[![python](https://github.com/scottzach1/gh-semantic-release/blob/gh-pages/python.svg?raw=true)](https://github.com/scottzach1/gh-semantic-release/)
+[![version](https://github.com/scottzach1/gh-semantic-release/blob/gh-pages/version.svg?raw=true)](https://github.com/scottzach1/gh-semantic-release/)
+[![coverage](https://github.com/scottzach1/gh-semantic-release/blob/gh-pages/coverage.svg?raw=true)](https://github.com/scottzach1/gh-semantic-release/)
+[![pytest](https://github.com/scottzach1/gh-semantic-release/blob/gh-pages/pytest.svg?raw=true)](https://github.com/scottzach1/gh-semantic-release/)
+[![ruff](https://github.com/scottzach1/gh-semantic-release/blob/gh-pages/ruff.svg?raw=true)](https://github.com/scottzach1/gh-semantic-release/)
+[![audit](https://github.com/scottzach1/gh-semantic-release/blob/gh-pages/audit.svg?raw=true)](https://github.com/scottzach1/gh-semantic-release/)
+
 Trigger a semantic release with the click of a button
 
 **THIS PROJECT IS CURRENTLY UNDER DEVELOPMENT**
