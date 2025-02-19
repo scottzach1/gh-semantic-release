@@ -1,0 +1,11 @@
+[project]
+name = "gh-semantic-release"
+version = "0.0.1"
+description = "Trigger a semantic release with the click of a button"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Zac Scott", email = "zac.scott11@gmail.com" },
+]
+license = { text = "BSD-3" }
+dependencies = []
