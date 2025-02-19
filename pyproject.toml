@@ -9,3 +9,8 @@ authors = [
 ]
 license = { text = "BSD-3" }
 dependencies = []
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.1.0",
+]
