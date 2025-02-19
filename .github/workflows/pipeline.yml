@@ -44,10 +44,46 @@ jobs:
           folder: badges/
           clean: false
 
+  pytest:
+    name: Pytest Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [ "3.11", "3.12", "3.13" ]
+      fail-fast: false
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install UV
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Set up Python
+        run: uv python install
+      - name: Install the project
+        run: uv sync --dev
+      - name: Run Pytest
+        id: pytest
+        run: |
+          uv run coverage run -m pytest tests/
+      - name: Generate Badges
+        if: success() || failure()
+        run: |
+          uv run coverage report
+          mkdir -p badges/
+          uv run anybadge --overwrite --value="${{ steps.pytest.outcome }}" --label=pytest --file=badges/pytest.svg success=green failure=red
+          uv run anybadge --overwrite --value="$(uv run coverage report --format=total)" --file=badges/coverage.svg coverage
+      - name: Publish badges to GitHub Pages
+        if: (success() || failure()) && (github.ref_name == github.event.repository.default_branch)
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: badges/
+          clean: false
+
   pypi-publish:
     name: Upload release to PyPI
     runs-on: ubuntu-latest
-    needs: [ ruff ]
+    needs: [ ruff, pytest ]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
     environment:
       name: pypi
