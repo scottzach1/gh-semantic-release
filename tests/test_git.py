@@ -1,6 +1,10 @@
-import pytest
+from collections.abc import Iterator
+from unittest import mock
 
-from scottzach1.semantic_release.githelper import SemanticMessage, parse_commit_msg
+import pytest
+from pydantic import BaseModel
+
+from scottzach1.semantic_release.githelper import LegacyMessage, SemanticMessage, parse_commit_msg, read_commit_log
 
 VALID_CASES = [
     (
@@ -235,6 +239,15 @@ VALID_CASES = [
             subject="with trailing period.",
         ),
     ),
+    (
+        "release(uv): this is a release!",
+        SemanticMessage(
+            type="release",
+            scope="uv",
+            breaking=False,
+            subject="this is a release!",
+        ),
+    ),
 ]
 
 
@@ -265,10 +278,47 @@ INVALID_CASES = [
 
 @pytest.mark.parametrize("commit_msg, expected_model", VALID_CASES)
 def test_valid_commit(commit_msg: str, expected_model: SemanticMessage):
+    assert SemanticMessage.parse(commit_msg) == expected_model
     assert parse_commit_msg(commit_msg) == expected_model
 
 
 @pytest.mark.parametrize("commit_msg", INVALID_CASES)
 def test_invalid_commit_msg(commit_msg: str):
     with pytest.raises(ValueError):
-        parse_commit_msg(commit_msg)
+        SemanticMessage.parse(commit_msg)
+    assert parse_commit_msg(commit_msg) == LegacyMessage(commit_msg=commit_msg)
+
+
+def test_read_commit_log():
+    class MockGitCommit(BaseModel):
+        hexsha: str
+        message: str
+
+    with mock.patch("git.Repo") as repo:
+        repo.iter_commits.return_value = iter(
+            [
+                MockGitCommit(hexsha="abc1234", message="feat: add user authentication"),
+                MockGitCommit(hexsha="def5678", message="fix(api): resolve timeout issue"),
+                MockGitCommit(hexsha="ghi9012", message="docs: update README"),
+                MockGitCommit(hexsha="jkl3456", message="feat!: redesign UI"),
+                MockGitCommit(hexsha="mno7890", message="chore: cleanup"),
+                MockGitCommit(hexsha="pqr1234", message="not a semantic commit"),
+                MockGitCommit(hexsha="stu5678", message="test(pytest): fix test_make_pancakes()"),
+                MockGitCommit(hexsha="vwx9102", message="release(uv): this is a release!"),
+                MockGitCommit(hexsha="yza3456", message="refactor: this should be skipped"),
+            ]
+        )
+
+        commits_iter = read_commit_log(repo)
+        commits = list(commits_iter)
+        assert isinstance(commits_iter, Iterator), "commits_iter should be an iterator"
+
+    assert commits == [
+        SemanticMessage(type="feat", scope=None, breaking=False, subject="add user authentication"),
+        SemanticMessage(type="fix", scope="api", breaking=False, subject="resolve timeout issue"),
+        SemanticMessage(type="docs", scope=None, breaking=False, subject="update README"),
+        SemanticMessage(type="feat", scope=None, breaking=True, subject="redesign UI"),
+        SemanticMessage(type="chore", scope=None, breaking=False, subject="cleanup"),
+        LegacyMessage(commit_msg="not a semantic commit"),
+        SemanticMessage(type="test", scope="pytest", breaking=False, subject="fix test_make_pancakes()"),
+    ]
