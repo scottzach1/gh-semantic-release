@@ -62,7 +62,7 @@ wheels = [
 [[package]]
 name = "gh-semantic-release"
 version = "0.0.1"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "gitpython" },
     { name = "pydantic" },
