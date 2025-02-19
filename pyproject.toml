@@ -17,3 +17,6 @@ dependencies = [
 dev = [
     "pre-commit>=4.1.0",
 ]
+
+[project.scripts]
+gh-semantic-release = "scottzach1.semantic_release.main:app"
