@@ -1,9 +1,9 @@
 import re
 from collections.abc import Iterator
-from typing import Self
+from typing import Any, Self
 
 from git import Repo
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, ValidationError, field_validator, model_validator
 
 TYPES = {
     "build",
@@ -20,7 +20,10 @@ TYPES = {
     "test",
     "temp",
 }
-COMMIT_PAT = re.compile(r"^(?P<type>[a-z]+)(\((?P<scope>[a-z0-9-]+)\))?(?P<breaking>!)?: (?P<subject>.+)$")
+COMMIT_PAT = re.compile(
+    r"^(?P<type>[a-z]+)(\((?P<scope>[a-z0-9-]+)\))?(?P<breaking>!)?: (?P<subject>.+)(?:\r?\n\r?\n(?P<body>[\s\S]*))?$"
+)
+__UNSET__ = object()
 
 
 class LegacyMessage(BaseModel):
@@ -28,11 +31,11 @@ class LegacyMessage(BaseModel):
     Represents a not semantic commit message
     """
 
-    commit_msg: str
+    message: str
 
     @classmethod
     def parse(cls, commit_msg: str) -> Self:
-        return cls(commit_msg=commit_msg)
+        return cls(message=commit_msg)
 
 
 class SemanticMessage(BaseModel):
@@ -44,6 +47,13 @@ class SemanticMessage(BaseModel):
     scope: str | None = None
     breaking: bool = False
     subject: str
+    body: str | None = None
+
+    @field_validator("type", "scope", "subject", "body")
+    def _trim_whitespace(cls, v: str):
+        if isinstance(v, str):
+            return v.strip()
+        return v
 
     @field_validator("type")
     def _validate_type(cls, v: str):
@@ -51,15 +61,25 @@ class SemanticMessage(BaseModel):
             raise ValueError(f"Invalid semver type: {v!r}")
         return v
 
-    @field_validator("breaking", mode="before")
-    def _validate_breaking(cls, v: str | None) -> bool:
-        if v is True or v == "!":
-            return True
+    @model_validator(mode="before")
+    def _validate_breaking(cls, data: Any):
+        if isinstance(data, dict):
+            # Case 1: Check if breaking specified via ! ("refactor!: redesign interface", "fix(user)!: rem field", etc.)
+            if (breaking := data.get("breaking", __UNSET__)) is not __UNSET__:
+                if breaking == "!" or breaking is True:
+                    data["breaking"] = True
+                    return data
+                elif breaking is not None and breaking is not False:
+                    raise ValueError(f"Invalid breaking mode: {breaking!r}")
 
-        if v is False or v is None:
-            return False
+            # Case 2: Check for BREAKING CHANGE: in commit body.
+            if (body := data.get("body")) and "BREAKING CHANGE" in body:
+                data["breaking"] = True
+                return data
 
-        raise ValueError(f"Unexpected value for breaking: {v!r}")
+            # Case 3: Default is False
+            data["breaking"] = False
+        return data
 
     @classmethod
     def parse(cls, commit_msg: str) -> Self:
@@ -95,8 +115,5 @@ def read_commit_log(repo: Repo) -> Iterator[SemanticMessage | LegacyMessage]:
     """
     for commit in repo.iter_commits():
         message = parse_commit_msg(commit.message)
-
-        if isinstance(message, SemanticMessage) and message.type == "release":
-            break
 
         yield message

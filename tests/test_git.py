@@ -4,7 +4,12 @@ from unittest import mock
 import pytest
 from pydantic import BaseModel
 
-from scottzach1.semantic_release.githelper import LegacyMessage, SemanticMessage, parse_commit_msg, read_commit_log
+from scottzach1.semantic_release.githelper import (
+    LegacyMessage,
+    SemanticMessage,
+    parse_commit_msg,
+    read_commit_log,
+)
 
 VALID_CASES = [
     (
@@ -229,7 +234,15 @@ VALID_CASES = [
             subject="update Dockerfile",
         ),
     ),
-    ("feat(123): numeric scope", SemanticMessage(type="feat", scope="123", breaking=False, subject="numeric scope")),
+    (
+        "feat(123): numeric scope",
+        SemanticMessage(
+            type="feat",
+            scope="123",
+            breaking=False,
+            subject="numeric scope",
+        ),
+    ),
     (
         "feat(api): with trailing period.",
         SemanticMessage(
@@ -246,6 +259,127 @@ VALID_CASES = [
             scope="uv",
             breaking=False,
             subject="this is a release!",
+        ),
+    ),
+    (
+        "feat(auth): add OAuth integration\n\nThis commit adds OAuth2 support with multiple providers.",
+        SemanticMessage(
+            type="feat",
+            scope="auth",
+            breaking=False,
+            subject="add OAuth integration",
+            body="This commit adds OAuth2 support with multiple providers.",
+        ),
+    ),
+    (
+        "fix: resolve memory leak\n\n"
+        "Identified and fixed memory leak in the rendering pipeline.\n"
+        "The issue was related to texture resources not being properly released.",
+        SemanticMessage(
+            type="fix",
+            scope=None,
+            breaking=False,
+            subject="resolve memory leak",
+            body=(
+                "Identified and fixed memory leak in the rendering pipeline.\n"
+                "The issue was related to texture resources not being properly released."
+            ),
+        ),
+    ),
+    (
+        "refactor(core)!: change API response format\n\n"
+        "BREAKING CHANGE: Response format has changed from XML to JSON.\n"
+        "This affects all API consumers.",
+        SemanticMessage(
+            type="refactor",
+            scope="core",
+            breaking=True,
+            subject="change API response format",
+            body="BREAKING CHANGE: Response format has changed from XML to JSON.\nThis affects all API consumers.",
+        ),
+    ),
+    (
+        "docs(readme): update installation instructions\n\n"
+        "Updated the installation guide with new dependency requirements.\n\n"
+        "Also fixed formatting issues in the examples section.",
+        SemanticMessage(
+            type="docs",
+            scope="readme",
+            breaking=False,
+            subject="update installation instructions",
+            body=(
+                "Updated the installation guide with new dependency requirements.\n\n"
+                "Also fixed formatting issues in the examples section."
+            ),
+        ),
+    ),
+    (
+        "feat(test): subject with unicode 🔥\n\nThis tests how unicode characters are handled.",
+        SemanticMessage(
+            type="feat",
+            scope="test",
+            subject="subject with unicode 🔥",
+            body="This tests how unicode characters are handled.",
+        ),
+    ),
+    (
+        "feat(api)!: trailing whitespace  \n\nHas trailing whitespace in subject.",
+        SemanticMessage(
+            type="feat",
+            scope="api",
+            breaking=True,
+            subject="trailing whitespace",
+            body="Has trailing whitespace in subject.",
+        ),
+    ),
+    (
+        "feat(api)!: trailing whitespace\n\nHas trailing whitespace in body.  ",
+        SemanticMessage(
+            type="feat",
+            scope="api",
+            breaking=True,
+            subject="trailing whitespace",
+            body="Has trailing whitespace in body.",
+        ),
+    ),
+    (
+        "feat(api)!: leading whitespace\n\n  Has leading whitespace in body.",
+        SemanticMessage(
+            type="feat",
+            scope="api",
+            breaking=True,
+            subject="leading whitespace",
+            body="Has leading whitespace in body.",
+        ),
+    ),
+    (
+        "feat:   leading whitespace in subject",
+        SemanticMessage(
+            type="feat",
+            scope=None,
+            subject="leading whitespace in subject",
+        ),
+    ),
+    (
+        "feat(auth): add login page\r\n\r\nImplemented new login screen with password reset.",
+        SemanticMessage(
+            type="feat",
+            scope="auth",
+            breaking=False,
+            subject="add login page",
+            body="Implemented new login screen with password reset.",
+        ),
+    ),
+    (
+        "fix(core)!: change authentication flow\r\n\r\n"
+        "BREAKING CHANGE: Users will need to re-authenticate.\r\n"
+        "This improves security by requiring 2FA.",
+        SemanticMessage(
+            type="fix",
+            scope="core",
+            breaking=True,
+            subject="change authentication flow",
+            body="BREAKING CHANGE: Users will need to re-authenticate.\r\nThis improves security by requiring 2FA.",
         ),
     ),
 ]
@@ -273,6 +407,11 @@ INVALID_CASES = [
     "@feat: invalid character",
     "fix-typo: invalid type",
     "feature(auth): non-standard type",
+    "fix(): empty scope\n\nThis has an empty scope which might be invalid.",
+    "feature: invalid type\n\nCommit types should be standardized.",
+    "chore[deps]: wrong scope delimiter\n\nUsing square brackets instead of parentheses.",
+    "refactor!api: missing parentheses\n\nThe scope should be in parentheses.",
+    "feat(ci)\n\nMissing subject line entirely.",
 ]
 
 
@@ -286,7 +425,7 @@ def test_valid_commit(commit_msg: str, expected_model: SemanticMessage):
 def test_invalid_commit_msg(commit_msg: str):
     with pytest.raises(ValueError):
         SemanticMessage.parse(commit_msg)
-    assert parse_commit_msg(commit_msg) == LegacyMessage(commit_msg=commit_msg)
+    assert parse_commit_msg(commit_msg) == LegacyMessage(message=commit_msg)
 
 
 def test_read_commit_log():
@@ -305,7 +444,7 @@ def test_read_commit_log():
                 MockGitCommit(hexsha="pqr1234", message="not a semantic commit"),
                 MockGitCommit(hexsha="stu5678", message="test(pytest): fix test_make_pancakes()"),
                 MockGitCommit(hexsha="vwx9102", message="release(uv): this is a release!"),
-                MockGitCommit(hexsha="yza3456", message="refactor: this should be skipped"),
+                MockGitCommit(hexsha="yza3456", message="refactor: rewrite some logic"),
             ]
         )
 
@@ -319,6 +458,30 @@ def test_read_commit_log():
         SemanticMessage(type="docs", scope=None, breaking=False, subject="update README"),
         SemanticMessage(type="feat", scope=None, breaking=True, subject="redesign UI"),
         SemanticMessage(type="chore", scope=None, breaking=False, subject="cleanup"),
-        LegacyMessage(commit_msg="not a semantic commit"),
+        LegacyMessage(message="not a semantic commit"),
         SemanticMessage(type="test", scope="pytest", breaking=False, subject="fix test_make_pancakes()"),
+        SemanticMessage(type="release", scope="uv", breaking=False, subject="this is a release!"),
+        SemanticMessage(type="refactor", scope=None, subject="rewrite some logic"),
     ]
+
+
+def test_semantic_validation_breaking():
+    with pytest.raises(ValueError):
+        # noinspection PyTypeChecker
+        SemanticMessage(
+            type="feat",
+            scope=None,
+            breaking="Nope",
+            subject="invalid breaking",
+        )
+
+    assert (
+        SemanticMessage(
+            type="feat",
+            scope=None,
+            breaking=False,
+            subject="invalid breaking",
+            body="BREAKING CHANGE: meepity moop",
+        ).breaking
+        is True
+    ), "breaking should be true"
