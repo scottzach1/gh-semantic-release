@@ -4,7 +4,7 @@ from unittest import mock
 import pytest
 from pydantic import BaseModel
 
-from scottzach1.semantic_release.githelper import (
+from scottzach1.semantic_release.message_parser import (
     LegacyMessage,
     SemanticMessage,
     parse_commit_msg,
